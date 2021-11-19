@@ -1,5 +1,7 @@
 # Tools:Q Align Objects
 
+[日本語](README.md)
+
 ## Outline
 
 View 3D / Pose Mode
