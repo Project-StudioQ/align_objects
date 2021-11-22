@@ -23,7 +23,7 @@ This addon is aligns selected objects or pose bones with assigned object or pose
 
 ## Video
 
-Under construction
+[![YouTubeで見る](https://img.youtube.com/vi/JuZlc8Z_PUM/0.jpg)](https://www.youtube.com/watch?v=JuZlc8Z_PUM)
 
 ## How to install
 

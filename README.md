@@ -23,7 +23,7 @@ View 3D / Pose Mode
 
 ## 動画
 
-準備中
+[![YouTubeで見る](https://img.youtube.com/vi/JuZlc8Z_PUM/0.jpg)](https://www.youtube.com/watch?v=JuZlc8Z_PUM)
 
 ## インストール
 
