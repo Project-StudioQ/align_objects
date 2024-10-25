@@ -30,9 +30,9 @@ DEBUG_MODE = False
 # -----------------------------------------------------------------------------
 
 def _get_target_object( ):
-    ts = bpy.context.scene
-    obj = ts.temp_align_objects_object
-    obj_sub = ts.temp_align_objects_object_subtarget
+    props = bpy.context.scene.q_align_objects
+    obj = props.object
+    obj_sub = props.object_subtarget
 
     if obj is None:
         return None
@@ -45,6 +45,44 @@ def _get_target_object( ):
 
 # -----------------------------------------------------------------------------
 
+def _update_position_all( self, context ):
+    props = bpy.context.scene.q_align_objects
+
+    props.position_flags[0] = props.position_all
+    props.position_flags[1] = props.position_all
+    props.position_flags[2] = props.position_all
+
+def _update_rotation_all( self, context ):
+    props = bpy.context.scene.q_align_objects
+
+    props.rotation_flags[0] = props.rotation_all
+    props.rotation_flags[1] = props.rotation_all
+    props.rotation_flags[2] = props.rotation_all
+
+def _update_scale_all( self, context ):
+    props = bpy.context.scene.q_align_objects
+
+    props.scale_flags[0] = props.scale_all
+    props.scale_flags[1] = props.scale_all
+    props.scale_flags[2] = props.scale_all
+
+class QCOMMON_Props_align_objects(bpy.types.PropertyGroup):
+    object: bpy.props.PointerProperty(name="Target Object", description="Target Object", type=bpy.types.Object, options= {'HIDDEN'})
+    object_subtarget: bpy.props.StringProperty(name="Target Object's Sub Target", description="Target Object's Sub Target", default="", options= {'HIDDEN'} )
+
+    position_all: bpy.props.BoolProperty(name="Position All", default=True, update=_update_position_all, options= {'HIDDEN'})
+    rotation_all: bpy.props.BoolProperty(name="Rotation All", default=True, update=_update_rotation_all, options= {'HIDDEN'})
+    scale_all: bpy.props.BoolProperty(name="Scale All", default=True, update=_update_scale_all, options= {'HIDDEN'})
+
+    position_flags: bpy.props.BoolVectorProperty(name="Position (World)", subtype="XYZ", default=(True, True, True), options= {'HIDDEN'})
+    rotation_flags: bpy.props.BoolVectorProperty(name="Rotation (Local)", subtype="XYZ", default=(True, True, True), options= {'HIDDEN'})
+    scale_flags: bpy.props.BoolVectorProperty(name="Scale", subtype="XYZ", default=(True, True, True), options= {'HIDDEN'})
+
+    bone_length: bpy.props.BoolProperty(name="Length", default=False, options= {'HIDDEN'})
+
+
+# -----------------------------------------------------------------------------
+
 class QCOMMON_OT_align_objects(bpy.types.Operator):
     bl_idname = "qcommon.align_objects"
     bl_label = "Align objects"
@@ -52,8 +90,8 @@ class QCOMMON_OT_align_objects(bpy.types.Operator):
     bl_options = {'REGISTER', 'UNDO'}
 
     def execute(self, context):
-        ts = bpy.context.scene
-        a_obj = ts.temp_align_objects_object
+        props = bpy.context.scene.q_align_objects
+        a_obj = props.object
         a = _get_target_object( )
 
         depsgraph = bpy.context.evaluated_depsgraph_get( )
@@ -152,8 +190,8 @@ class QCOMMON_OT_align_objects(bpy.types.Operator):
 
                     # 移動
                     new_location = location
-                    for i in range( len( ts.temp_align_objects_position_flags ) ):
-                        if not ts.temp_align_objects_position_flags[i]:
+                    for i in range( len( props.position_flags ) ):
+                        if not props.position_flags[i]:
                             new_location[i] = old_location[i]
                     b.matrix.translation = ( new_location @ origin_matrix ) - ( object_world_matrix.translation )
 
@@ -172,7 +210,7 @@ class QCOMMON_OT_align_objects(bpy.types.Operator):
                     # 実際に回転反映
                     new_rotation = object_world_matrix.to_3x3( ) @ old_rotation
                     for i in range( 3 ):
-                        if ts.temp_align_objects_rotation_flags[i]:
+                        if props.rotation_flags[i]:
                             new_rotation[i] = rotation[i]
                     new_rotation = new_rotation.normalized( )
                     local_matrix = object_world_matrix.to_3x3( ) @ b.matrix.to_3x3( )
@@ -185,21 +223,21 @@ class QCOMMON_OT_align_objects(bpy.types.Operator):
                         b.rotation_euler = new_rotation.to_euler( b.rotation_euler.order )
 
                     # 拡大
-                    for i in range( len( ts.temp_align_objects_scale_flags ) ):
-                        if ts.temp_align_objects_scale_flags[i]:
+                    for i in range( len( props.scale_flags ) ):
+                        if props.scale_flags[i]:
                             b.scale[i] = a.scale[i]
             else:
                 new_location = location.copy( )
                 if b.parent:
                     new_location = ( new_location - b.parent.matrix_world.to_translation( ) ) @ b.parent.matrix_world.to_3x3( )
-                for i in range( len( ts.temp_align_objects_position_flags ) ):
-                    if ts.temp_align_objects_position_flags[i]:
+                for i in range( len( props.position_flags ) ):
+                    if props.position_flags[i]:
                         b.location[i] = new_location[i]
                         b.delta_location[i] = 0.0
 
                 new_rotation = b.matrix_world.to_3x3( )
                 for i in range( 3 ):
-                    if ts.temp_align_objects_rotation_flags[i]:
+                    if props.rotation_flags[i]:
                         new_rotation[i] = rotation[i]
                 new_rotation = new_rotation.normalized( )
                 if b.parent:
@@ -214,13 +252,13 @@ class QCOMMON_OT_align_objects(bpy.types.Operator):
                     b.rotation_euler = new_rotation.to_euler( b.rotation_euler.order )
                     b.delta_rotation_euler = (0,0,0)
 
-                for i in range( len( ts.temp_align_objects_scale_flags ) ):
-                    if ts.temp_align_objects_scale_flags[i]:
+                for i in range( len( props.scale_flags ) ):
+                    if props.scale_flags[i]:
                         b.scale[i] = a.scale[i]
                         b.delta_scale[i] = 1.0
 
         # 長さがオンの場合は、Editで長さをコピーする
-        if ts.temp_align_objects_bone_length and length:
+        if props.bone_length and length:
             saved_mode = bpy.context.active_object.mode
             self.set_length_to_edit_bones( select_list_with_object, length )
             bpy.ops.object.mode_set(mode=saved_mode)
@@ -270,8 +308,8 @@ class QCOMMON_OT_align_objects_object_picker(bpy.types.Operator):
 
     def execute( self, context ):
         if bpy.context.active_object is not None:
-            ts = bpy.context.scene
-            ts.temp_align_objects_object = bpy.context.active_object
+            props = bpy.context.scene.q_align_objects
+            props.objects_object = bpy.context.active_object
 
         return {'FINISHED'}
 
@@ -283,16 +321,53 @@ class QCOMMON_OT_align_objects_bone_picker(bpy.types.Operator):
 
     def execute( self, context ):
         if bpy.context.active_pose_bone is not None:
-            ts = bpy.context.scene
-            ts.temp_align_objects_object_subtarget = bpy.context.active_pose_bone.name
+            props = bpy.context.scene.q_align_objects
+            props.object_subtarget = bpy.context.active_pose_bone.name
 
         return {'FINISHED'}
 
 # -----------------------------------------------------------------------------
 
-class QCOMMON_PT_align_objects(bpy.types.Panel):
-    bl_idname = "QCOMMON_PT_align_objects"
-    bl_category = "Q_COMMON"
+def draw_ui( layout, show_execute = True ):
+    props = bpy.context.scene.q_align_objects
+
+    row = layout.row( align=True )
+    row.prop(props, "object")
+    row.operator( QCOMMON_OT_align_objects_object_picker.bl_idname, text="", icon='EYEDROPPER' )
+    if props.object is None:
+        return
+
+    if props.object.type == "ARMATURE":
+        row = layout.row( align=True )
+        row.prop_search( props, "object_subtarget", props.object.pose, "bones" )
+        row.operator( QCOMMON_OT_align_objects_bone_picker.bl_idname, text="", icon='EYEDROPPER' )
+
+    row = layout.row( )
+    row.prop(props, "position_flags", toggle=True)
+    row.prop(props, "position_all", toggle=True, text="All")
+
+    row = layout.row( )
+    row.prop(props, "rotation_flags", toggle=True)
+    row.prop(props, "rotation_all", toggle=True, text="All")
+
+    row = layout.row( )
+    row.prop(props, "scale_flags", toggle=True)
+    row.prop(props, "scale_all", toggle=True, text="All")
+
+    if props.object.type == "ARMATURE" and bpy.context.active_object is not None and bpy.context.active_object.mode == "POSE":
+        row = layout.row( )
+        row.prop(props, "bone_length", toggle=True)
+
+    if show_execute:
+        layout.operator( QCOMMON_OT_align_objects.bl_idname, text="Execute", icon="CHECKMARK" )
+
+# -----------------------------------------------------------------------------
+
+class QCOMMON_PT_align_objects_base(bpy.types.Panel):
+    """
+        ベースパネル
+        実際の追加は下の_for_***のほうで行う
+    """
 
     bl_label = "Align Objects"
     bl_space_type = "VIEW_3D"
@@ -312,111 +387,62 @@ class QCOMMON_PT_align_objects(bpy.types.Panel):
     def draw(self, context):
         ''' UI設定
         '''
-        layout = self.layout
-
-        ts = bpy.context.scene
-        a = ts.temp_align_objects_object
-
-        row = layout.row( align=True )
-        row.prop(ts, "temp_align_objects_object")
-        row.operator( QCOMMON_OT_align_objects_object_picker.bl_idname, text="", icon='EYEDROPPER' )
-        if a is None:
-            return
-
-        if a.type == "ARMATURE":
-            row = layout.row( align=True )
-            row.prop_search( ts, "temp_align_objects_object_subtarget", a.pose, "bones" )
-            row.operator( QCOMMON_OT_align_objects_bone_picker.bl_idname, text="", icon='EYEDROPPER' )
-
-        row = layout.row( )
-        row.prop(ts, "temp_align_objects_position_flags", toggle=True)
-        row.prop(ts, "temp_align_objects_position_all", toggle=True, text="All")
-
-        row = layout.row( )
-        row.prop(ts, "temp_align_objects_rotation_flags", toggle=True)
-        row.prop(ts, "temp_align_objects_rotation_all", toggle=True, text="All")
-
-        row = layout.row( )
-        row.prop(ts, "temp_align_objects_scale_flags", toggle=True)
-        row.prop(ts, "temp_align_objects_scale_all", toggle=True, text="All")
-
-        if a.type == "ARMATURE" and bpy.context.active_object is not None and bpy.context.active_object.mode == "POSE":
-            row = layout.row( )
-            row.prop(ts, "temp_align_objects_bone_length", toggle=True)
-
-        layout.operator( QCOMMON_OT_align_objects.bl_idname, text="Execute", icon="CHECKMARK" )
+        draw_ui( self.layout )
 
 # -----------------------------------------------------------------------------
 
-def _update_position_all( self, context ):
-    ts = bpy.context.scene
+class QCOMMON_PT_align_objects_for_rig(QCOMMON_PT_align_objects_base):
+    bl_idname = "QCOMMON_PT_align_objects"
+    bl_category = "Q_RIG"
 
-    ts.temp_align_objects_position_flags[0] = ts.temp_align_objects_position_all
-    ts.temp_align_objects_position_flags[1] = ts.temp_align_objects_position_all
-    ts.temp_align_objects_position_flags[2] = ts.temp_align_objects_position_all
+class QCOMMON_PT_align_objects_for_anim(QCOMMON_PT_align_objects_base):
+    bl_idname = "QANIM_PT_align_objects"
+    bl_category = "Q_ANIM"
 
-def _update_rotation_all( self, context ):
-    ts = bpy.context.scene
-
-    ts.temp_align_objects_rotation_flags[0] = ts.temp_align_objects_rotation_all
-    ts.temp_align_objects_rotation_flags[1] = ts.temp_align_objects_rotation_all
-    ts.temp_align_objects_rotation_flags[2] = ts.temp_align_objects_rotation_all
-
-def _update_scale_all( self, context ):
-    ts = bpy.context.scene
-
-    ts.temp_align_objects_scale_flags[0] = ts.temp_align_objects_scale_all
-    ts.temp_align_objects_scale_flags[1] = ts.temp_align_objects_scale_all
-    ts.temp_align_objects_scale_flags[2] = ts.temp_align_objects_scale_all
+class QCOMMON_PT_align_objects_for_model(QCOMMON_PT_align_objects_base):
+    bl_idname = "QMODEL_PT_align_objects"
+    bl_category = "Q_MDL"
 
 # -----------------------------------------------------------------------------
 
-def _initialized( ):
-    """
-        初期化
-    """
-    ts = bpy.types.Scene
+class QCOMMON_OT_menu_align_objects(bpy.types.Operator):
+    # XXX: ショートカット登録のために qcommon外にしている
+    bl_idname = "view3d.menu_align_objects"
+    bl_label = "Align Objects(Q)"
+    bl_description = "Align Objects"
 
-    ts.temp_align_objects_object = bpy.props.PointerProperty(name="Target Object", description="Target Object", type=bpy.types.Object)
-    ts.temp_align_objects_object_subtarget = bpy.props.StringProperty(name="Target Object's Sub Target", description="Target Object's Sub Target", default="")
+    bl_options = {'INTERNAL'}
 
-    ts.temp_align_objects_position_all = bpy.props.BoolProperty(name="Position All", default=True, update=_update_position_all)
-    ts.temp_align_objects_rotation_all = bpy.props.BoolProperty(name="Rotation All", default=True, update=_update_rotation_all)
-    ts.temp_align_objects_scale_all = bpy.props.BoolProperty(name="Scale All", default=True, update=_update_scale_all)
+    width = 300     # ポップアップの表示幅
 
-    ts.temp_align_objects_position_flags = bpy.props.BoolVectorProperty(name="Position (World)", subtype="XYZ", default=(True, True, True))
-    ts.temp_align_objects_rotation_flags = bpy.props.BoolVectorProperty(name="Rotation (Local)", subtype="XYZ", default=(True, True, True))
-    ts.temp_align_objects_scale_flags = bpy.props.BoolVectorProperty(name="Scale", subtype="XYZ", default=(True, True, True))
+    def draw(self, context):
+        draw_ui( self.layout, False )
 
-    ts.temp_align_objects_bone_length = bpy.props.BoolProperty(name="Length", default=False)
+    def execute(self, context):
+        return bpy.ops.qcommon.align_objects( )
 
-def _deinitialized( ):
-    """
-        後始末
-    """
-    ts = bpy.types.Scene
+    def invoke(self, context, event):
+        return bpy.context.window_manager.invoke_props_dialog(self, width=self.width)
 
-    del ts.temp_align_objects_object
-    del ts.temp_align_objects_object_subtarget
+# -----------------------------------------------------------------------------
 
-    del ts.temp_align_objects_position_all
-    del ts.temp_align_objects_rotation_all
-    del ts.temp_align_objects_scale_all
-
-    del ts.temp_align_objects_position_flags
-    del ts.temp_align_objects_rotation_flags
-    del ts.temp_align_objects_scale_flags
-
-    del ts.temp_align_objects_bone_length
+def menu_fn(self,context):
+    self.layout.operator(QCOMMON_OT_menu_align_objects.bl_idname)
 
 # -----------------------------------------------------------------------------
 
 classes = (
+    QCOMMON_Props_align_objects,
+
     QCOMMON_OT_align_objects,
     QCOMMON_OT_align_objects_object_picker,
     QCOMMON_OT_align_objects_bone_picker,
 
-    QCOMMON_PT_align_objects,
+    QCOMMON_OT_menu_align_objects,
+
+    QCOMMON_PT_align_objects_for_rig,
+    QCOMMON_PT_align_objects_for_anim,
+    QCOMMON_PT_align_objects_for_model,
 )
 
 def register():
@@ -426,13 +452,17 @@ def register():
     for i in classes:
         bpy.utils.register_class(i)
 
-    _initialized( )
+    bpy.types.Scene.q_align_objects = bpy.props.PointerProperty( type= QCOMMON_Props_align_objects )
+    bpy.types.VIEW3D_MT_object.append(menu_fn)
+    bpy.types.VIEW3D_MT_pose.append(menu_fn)
 
 def unregister():
     """
         クラス登録解除
     """
-    _deinitialized( )
+    bpy.types.VIEW3D_MT_pose.remove(menu_fn)
+    bpy.types.VIEW3D_MT_object.remove(menu_fn)
+    del bpy.types.Scene.q_align_objects
 
     for i in classes:
         bpy.utils.unregister_class(i)
